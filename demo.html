@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A组功能模块 - 完整功能演示</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+.header { background: linear-gradient(135deg, #1a73e8, #4285f4); color: white; padding: 24px 32px; }
+.header h1 { font-size: 22px; font-weight: 600; }
+.header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+.container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+.step { background: white; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+.step-header { padding: 16px 20px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.step-num { width: 28px; height: 28px; border-radius: 50%; background: #e8f0fe; color: #1a73e8; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.step-num.done { background: #34a853; color: white; }
+.step-num.running { background: #fbbc04; color: #333; animation: pulse 1s infinite; }
+.step-num.fail { background: #ea4335; color: white; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.step-title { font-size: 15px; font-weight: 500; flex: 1; }
+.step-method { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+.method-get { background: #e8f5e9; color: #2e7d32; }
+.method-post { background: #fff3e0; color: #e65100; }
+.method-patch { background: #e3f2fd; color: #1565c0; }
+.step-body { padding: 0 20px 16px; display: none; }
+.step-body.open { display: block; }
+.req-box, .resp-box { background: #f8f9fa; border-radius: 8px; padding: 12px; margin-top: 8px; font-size: 12px; }
+.req-box { border-left: 3px solid #fbbc04; }
+.resp-box { border-left: 3px solid #34a853; }
+.label { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+pre { white-space: pre-wrap; word-break: break-all; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.5; }
+.status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.status-ok { background: #e8f5e9; color: #2e7d32; }
+.status-err { background: #fce4ec; color: #c62828; }
+.controls { text-align: center; margin: 20px 0; }
+.btn { padding: 10px 28px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; margin: 0 4px; }
+.btn-primary { background: #1a73e8; color: white; }
+.btn-primary:hover { background: #1557b0; }
+.btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+.btn-outline { background: white; color: #1a73e8; border: 1px solid #1a73e8; }
+.summary { background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.summary h3 { font-size: 15px; margin-bottom: 12px; color: #1a73e8; }
+.stats { display: flex; gap: 16px; flex-wrap: wrap; }
+.stat { flex: 1; min-width: 120px; background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center; }
+.stat-val { font-size: 24px; font-weight: 700; color: #1a73e8; }
+.stat-label { font-size: 11px; color: #666; margin-top: 2px; }
+.flow-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; padding: 8px 20px 0; }
+.feature-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px; }
+.tag-new { background: #e8f0fe; color: #1a73e8; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>A组报名与资格管理系统 - 完整功能演示</h1>
+  <p>基于 newbase 的功能补齐：运营专家补录、容量修改、退出统一链路 | localhost:8780</p>
+</div>
+
+<div class="container">
+  <div class="controls">
+    <button class="btn btn-primary" id="runBtn" onclick="runAll()">运行全部流程</button>
+    <button class="btn btn-outline" onclick="resetAll()">重置</button>
+  </div>
+
+  <div class="summary" id="summary" style="display:none">
+    <h3>执行摘要</h3>
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="statTotal">0</div><div class="stat-label">总步骤</div></div>
+      <div class="stat"><div class="stat-val" id="statPass">0</div><div class="stat-label">成功</div></div>
+      <div class="stat"><div class="stat-val" id="statFail">0</div><div class="stat-label">失败</div></div>
+      <div class="stat"><div class="stat-val" id="statTime">0ms</div><div class="stat-label">耗时</div></div>
+    </div>
+  </div>
+
+  <div id="steps"></div>
+</div>
+
+<script>
+const BASE = 'http://localhost:8780/api/v1';
+const ACTIVITY_ID = 'seed-activity-1';
+let state = {};
+
+const steps = [
+  {
+    group: '基础流程',
+    title: '获取角色列表',
+    method: 'GET', url: '/dev/personas',
+    fetch: () => fetch(`${BASE}/dev/personas`).then(r => r.json()),
+    showResult: (data) => `返回 ${data.length} 个角色: ${data.map(p => p.name).join(', ')}`
+  },
+  {
+    title: '查看公开活动',
+    method: 'GET', url: '/public/activities',
+    fetch: () => fetch(`${BASE}/public/activities`).then(r => r.json()),
+    showResult: (data) => {
+      const items = data.items || data;
+      return `找到 ${Array.isArray(items) ? items.length : 0} 个活动` +
+        (Array.isArray(items) && items.length > 0 ? `，首个: ${items[0].name}` : '');
+    }
+  },
+  {
+    group: '运营专家补录 (新功能)',
+    title: '运营登录',
+    method: 'POST', url: '/dev/sessions',
+    fetch: async () => {
+      const r = await fetch(`${BASE}/dev/sessions`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ persona_id: 'persona-operator-1', activity_id: ACTIVITY_ID, role: 'OPERATOR' })
+      });
+      const data = await r.json();
+      state.operatorToken = data.token;
+      return data;
+    },
+    showResult: (data) => `运营「${data.name}」已登录，is_operator: ${data.is_operator}`
+  },
+  {
+    title: '创建补录专家',
+    method: 'POST', url: '/manual/activities/{id}/experts',
+    feature: 'new',
+    fetch: async () => {
+      const r = await fetch(`${BASE}/manual/activities/${ACTIVITY_ID}/experts`, {
+        method: 'POST', headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${state.operatorToken}`
+        },
+        body: JSON.stringify({
+          name: '补录导师-' + Date.now().toString().slice(-4),
+          phone: '13800138000',
+          branch: 'BEIJING',
+          industries: ['TECH', 'EDUCATION'],
+          topics: ['CAREER', 'TECH_SKILL']
+        })
+      });
+      const data = await r.json();
+      if (data.activity_member_id) {
+        state.manualMemberId = data.activity_member_id;
+      } else if (data.detail && data.detail.includes('already exists')) {
+        const listR = await fetch(`${BASE}/activities/${ACTIVITY_ID}/registrations`, {
+          headers: { 'Authorization': `Bearer ${state.operatorToken}` }
+        });
+        const list = await listR.json();
+        const items = list.items || list;
+        const expert = Array.isArray(items) ? items.find(m => m.role === 'EXPERT') : null;
+        if (expert) state.manualMemberId = expert.activity_member_id;
+      }
+      return data;
+    },
+    showResult: (data) => {
+      if (data.detail && data.detail.includes('already exists')) {
+        return `⚠️ ${data.detail} (使用已有专家 ID: ${state.manualMemberId || '未知'})`;
+      }
+      return data.detail ? `⚠️ ${data.detail}` : `专家创建成功，成员ID: ${data.activity_member_id || '已存在'}`;
+    }
+  },
+  {
+    title: '编辑补录草稿',
+    method: 'PATCH', url: '/manual/activities/{id}/members/{memberId}/draft',
+    feature: 'new',
+    fetch: () => fetch(`${BASE}/manual/activities/${ACTIVITY_ID}/members/${state.manualMemberId}/draft`, {
+      method: 'PATCH', headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.operatorToken}`
+      },
+      body: JSON.stringify({
+        sections: {
+          experience: '10年技术管理经验，曾带领50人团队',
+          supported_problems: '团队管理、技术架构、职业规划',
+          boundaries: '每周最多2次咨询，每次1小时'
+        }
+      })
+    }).then(r => r.json()),
+    showResult: (data) => {
+      if (data.version) state.expertVersion = data.version;
+      return data.detail ? '⚠️ ' + data.detail : '草稿已更新，版本：' + data.version;
+    }
+  },
+  {
+    title: '提交补录专家',
+    method: 'POST', url: '/manual/activities/{id}/members/{memberId}/submit',
+    feature: 'new',
+    fetch: () => fetch(BASE + '/manual/activities/' + ACTIVITY_ID + '/members/' + state.manualMemberId + '/submit', {
+      method: 'POST', headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + state.operatorToken
+      },
+      body: JSON.stringify({
+        confirmation_basis: '运营确认资料完整，符合补录条件',
+        expected_version: state.expertVersion || 2
+      })
+    }).then(r => r.json()),
+    showResult: (data) => data.detail ? `⚠️ ${data.detail}` : `补录提交成功，状态: ${data.submission_status || 'SUBMITTED'}`
+  },
+  {
+    group: '容量修改 (新功能)',
+    title: '修改专家容量',
+    method: 'PATCH', url: '/activities/{id}/members/{memberId}/capacity',
+    feature: 'new',
+    fetch: () => fetch(`${BASE}/activities/${ACTIVITY_ID}/members/${state.manualMemberId}/capacity`, {
+      method: 'PATCH', headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.operatorToken}`
+      },
+      body: JSON.stringify({
+        capacity_override: 5,
+        reason: '该导师经验丰富，增加本期容量',
+        expected_version: 1
+      })
+    }).then(r => r.json()),
+    showResult: (data) => {
+      if (data.version) state.capacityVersion = data.version;
+      return data.detail ? '⚠️ ' + data.detail : '容量已更新：覆盖值=' + data.capacity_override + ', 有效容量=' + data.effective_capacity + ', 版本=' + data.version;
+    }
+  },
+  {
+    group: '退出统一链路 (新功能)',
+    title: '停用成员',
+    method: 'POST', url: '/activities/{id}/members/{memberId}/end',
+    feature: 'new',
+    fetch: () => fetch(`${BASE}/activities/${ACTIVITY_ID}/members/${state.manualMemberId}/end`, {
+      method: 'POST', headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${state.operatorToken}`
+      },
+      body: JSON.stringify({ reason: '导师主动退出本期活动' })
+    }).then(r => r.json()),
+    showResult: (data) => data.detail ? `⚠️ ${data.detail}` : `已停用，状态: ${data.participation_status}, 原因: ${data.reason}`
+  },
+  {
+    group: '验证与审计',
+    title: '查看报名列表',
+    method: 'GET', url: '/activities/{id}/registrations',
+    fetch: () => fetch(`${BASE}/activities/${ACTIVITY_ID}/registrations`, {
+      headers: { 'Authorization': `Bearer ${state.operatorToken}` }
+    }).then(r => r.json()),
+    showResult: (data) => {
+      const items = data.items || data;
+      return `共 ${Array.isArray(items) ? items.length : 0} 条记录`
+    }
+  },
+  {
+    title: '查看审计日志',
+    method: 'GET', url: '/activities/{id}/audit-logs',
+    fetch: () => fetch(`${BASE}/activities/${ACTIVITY_ID}/audit-logs`, {
+      headers: { 'Authorization': `Bearer ${state.operatorToken}` }
+    }).then(r => r.json()),
+    showResult: (data) => {
+      const items = data.items || data;
+      return `共 ${Array.isArray(items) ? items.length : 0} 条审计记录`
+    }
+  },
+  {
+    title: '查看运营仪表盘',
+    method: 'GET', url: '/activities/{id}/registration-dashboard',
+    fetch: () => fetch(`${BASE}/activities/${ACTIVITY_ID}/registration-dashboard`, {
+      headers: { 'Authorization': `Bearer ${state.operatorToken}` }
+    }).then(r => r.json()),
+    showResult: (data) => `仪表盘: 总报名 ${data.total_members || 0}，已提交 ${data.submitted || 0}，已通过 ${data.approved || 0}`
+  },
+];
+
+function renderSteps() {
+  const container = document.getElementById('steps');
+  let html = '';
+  let lastGroup = '';
+  steps.forEach((s, i) => {
+    if (s.group && s.group !== lastGroup) {
+      html += `<div class="flow-label">${s.group}</div>`;
+      lastGroup = s.group;
+    }
+    const tag = s.feature === 'new' ? '<span class="feature-tag tag-new">新功能</span>' : '';
+    html += `
+    <div class="step" id="step-${i}">
+      <div class="step-header" onclick="toggleStep(${i})">
+        <div class="step-num" id="num-${i}">${i + 1}</div>
+        <span class="step-title">${s.title}${tag}</span>
+        <span class="step-method ${s.method === 'GET' ? 'method-get' : s.method === 'PATCH' ? 'method-patch' : 'method-post'}">${s.method}</span>
+        <span id="status-${i}"></span>
+      </div>
+      <div class="step-body" id="body-${i}">
+        <div class="req-box">
+          <div class="label">请求</div>
+          <pre>${s.method} ${BASE}${s.url.replace('{id}', ACTIVITY_ID).replace('{memberId}', 'MEMBER_ID')}</pre>
+        </div>
+        <div class="resp-box" id="resp-${i}" style="display:none">
+          <div class="label">响应</div>
+          <pre id="resp-text-${i}"></pre>
+        </div>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function toggleStep(i) {
+  document.getElementById(`body-${i}`).classList.toggle('open');
+}
+
+async function runStep(i) {
+  const step = steps[i];
+  const num = document.getElementById(`num-${i}`);
+  const status = document.getElementById(`status-${i}`);
+  const respBox = document.getElementById(`resp-${i}`);
+  const respText = document.getElementById(`resp-text-${i}`);
+  const body = document.getElementById(`body-${i}`);
+
+  num.className = 'step-num running';
+  body.classList.add('open');
+
+  // Update URL display with actual member ID if available
+  if (state.manualMemberId && step.url.includes('{memberId}')) {
+    const reqBox = body.querySelector('.req-box pre');
+    if (reqBox) {
+      reqBox.textContent = `${step.method} ${BASE}${step.url.replace('{id}', ACTIVITY_ID).replace('{memberId}', state.manualMemberId)}`;
+    }
+  }
+
+  const start = Date.now();
+  try {
+    const data = await step.fetch();
+    const elapsed = Date.now() - start;
+    const isError = data && data.detail && typeof data.detail === 'string' && !data.user_id && !data.items && !data.members;
+    if (isError) {
+      num.className = 'step-num fail';
+      status.innerHTML = `<span class="status-badge status-err">${elapsed}ms 错误</span>`;
+    } else {
+      num.className = 'step-num done';
+      status.innerHTML = `<span class="status-badge status-ok">${elapsed}ms</span>`;
+    }
+    respBox.style.display = 'block';
+    const json = JSON.stringify(data, null, 2);
+    const summary = step.showResult ? step.showResult(data) : '';
+    respText.textContent = (summary ? summary + '\n\n' : '') + json.substring(0, 2000);
+    return !isError;
+  } catch (e) {
+    num.className = 'step-num fail';
+    status.innerHTML = `<span class="status-badge status-err">错误</span>`;
+    respBox.style.display = 'block';
+    respText.textContent = `错误: ${e.message}`;
+    return false;
+  }
+}
+
+async function runAll() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '运行中...';
+  document.getElementById('summary').style.display = 'block';
+
+  const startTime = Date.now();
+  let pass = 0, fail = 0;
+
+  for (let i = 0; i < steps.length; i++) {
+    const ok = await runStep(i);
+    if (ok) pass++; else fail++;
+    document.getElementById('statTotal').textContent = steps.length;
+    document.getElementById('statPass').textContent = pass;
+    document.getElementById('statFail').textContent = fail;
+  }
+
+  document.getElementById('statTime').textContent = (Date.now() - startTime) + 'ms';
+  btn.disabled = false;
+  btn.textContent = '重新运行';
+}
+
+function resetAll() {
+  state = {};
+  renderSteps();
+  document.getElementById('summary').style.display = 'none';
+  document.getElementById('runBtn').textContent = '运行全部流程';
+}
+
+renderSteps();
+</script>
+</body>
+</html>
